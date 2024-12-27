@@ -2,7 +2,7 @@ name: Build Kernel CI
 
 on:
   push:
-    branches: [ "main" , "selinux" ]
+    branches: [ "main" , "selinux", "wifi" ]
 jobs:
   build:
 
