@@ -1,0 +1,85 @@
+name: Build Kernel CI
+
+on:
+  push:
+    branches: [ "main" , "selinux" ]
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: setup environment 
+      run: |
+       sudo apt-get update && sudo apt-get install bc flex git ccache automake lzop bison gperf build-essential zip curl zlib1g-dev zlib1g-dev g++-multilib python3-networkx libxml2-utils bzip2 libbz2-dev libbz2-1.0 libghc-bzlib-dev squashfs-tools pngcrush schedtool dpkg-dev liblz4-tool make optipng -y
+       sudo apt-get install git aptitude make gcc -y
+       sudo apt install python-is-python3 build-essential openssl pip -y
+       # Inease linux swapfile size (works best on SSD)
+       #sudo swapoff -a
+       #sudo dd if=/dev/zero of=/swapfile bs=4G count=8
+       #sudo mkswap /swapfile
+       #sudo swapon /swapfile
+       #free -m
+       # install python 2
+       pip install virtualenv 
+       export PATH=$PATH:$(pwd)/.local/bin
+       sudo apt install python3-virtualenv -y
+       sudo apt install python2.7 -y
+       sudo apt install openssl -y
+       sudo aptitude install libssl-dev -y
+       sudo apt-get install libtinfo5 neofetch -y
+       # install repo
+       mkdir -p ~/.bin
+       PATH="${pwd}/.bin:${PATH}"
+       curl https://storage.googleapis.com/git-repo-downloads/repo > ~/.bin/repo
+       chmod a+rx ~/.bin/repo
+       neofetch
+
+    - name: set permissions
+      run: sudo chmod +rwx *
+      
+    - name: run building script 
+      run: bash ./build_kernel.sh
+      
+    - name: list fils
+      run: |
+        ls $(pwd)/arch/arm64/boot
+      
+    - name: Archive build output and send to tg
+      run: |
+        COMMIT_TITLE=$(echo "${{ github.event.head_commit.message }}" | head -n 1)
+        echo "Commit Title: $COMMIT_TITLE"
+        
+        mkdir -p output
+        cp -r $(pwd)/arch/arm64/boot/* output/         
+        
+        sudo apt install curl
+        curl -F "chat_id=1866453320" -F "document=@arch/arm64/boot/Image" "https://api.telegram.org/bot7854231397:AAHWtx4hS9ow-Lntr2-5TMJJq6KHSAxfd9o/sendDocument"
+        curl -F "chat_id=1866453320" -F "document=@arch/arm64/boot/Image.gz" "https://api.telegram.org/bot7854231397:AAHWtx4hS9ow-Lntr2-5TMJJq6KHSAxfd9o/sendDocument"
+        # curl -F "chat_id=2150067042" -F "document=@arch/arm64/boot/Image" -F caption="$COMMIT_TITLE" "https://api.telegram.org/bot7854231397:AAHWtx4hS9ow-Lntr2-5TMJJq6KHSAxfd9o/sendDocument"
+        
+        cp $(pwd)/arch/arm64/boot/Image $(pwd)/anykernel/
+        cd anykernel; zip -9 -r ../output/a137f_u6_kernel_TESTING-$COMMIT_TITLE-$(date +%Y-%m-%d).zip ./* ; cd ..
+        curl -F "chat_id=1866453320" -F "document=@output/a137f_u6_kernel_TESTING-$COMMIT_TITLE-$(date +%Y-%m-%d).zip" "https://api.telegram.org/bot7854231397:AAHWtx4hS9ow-Lntr2-5TMJJq6KHSAxfd9o/sendDocument"
+        curl -F "chat_id=-1002124013929" -F "document=@output/a137f_u6_kernel_TESTING-$COMMIT_TITLE-$(date +%Y-%m-%d).zip"  -F caption="$COMMIT_TITLE" "https://api.telegram.org/bot7854231397:AAHWtx4hS9ow-Lntr2-5TMJJq6KHSAxfd9o/sendDocument"
+        curl -F "chat_id=-1002150067042" -F "document=@output/a137f_u6_kernel_TESTING-$COMMIT_TITLE-$(date +%Y-%m-%d).zip"  -F caption="$COMMIT_TITLE" "https://api.telegram.org/bot7854231397:AAHWtx4hS9ow-Lntr2-5TMJJq6KHSAxfd9o/sendDocument"
+        
+        curl -X POST "https://api.telegram.org/bot7854231397:AAHWtx4hS9ow-Lntr2-5TMJJq6KHSAxfd9o/sendMessage" -d "chat_id=2150067042" -d "text= $(date)  $COMMIT_TITLE"
+        
+        tar -czf release.tar.gz output
+        cp release.tar.gz output/
+        curl -F "chat_id=1866453320" -F "document=@output/release.tar.gz" "https://api.telegram.org/bot7854231397:AAHWtx4hS9ow-Lntr2-5TMJJq6KHSAxfd9o/sendDocument"
+        
+    #- name: Upload to Release
+    #  uses: softprops/action-gh-release@master
+    #  with:
+    #    files: |
+    #      ouput/*
+    #    name: Unofficial kernel for a137f // ${{ env.BUILD_DATE }}
+    #    tag_name: ${{ github.run_id }}
+    #    body: |
+    #      Build: ${{ inputs.MANIFEST_BRANCH }}
+    #      Device: a13ve
+    #      Commit: see the repo - i hope it works
+
+   
